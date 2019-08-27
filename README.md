@@ -130,10 +130,10 @@ Regarding our requirements, installing Java runtime was also a bit of an issue, 
 
 This exporter is still in its early stages! It still lacks ~~the `dimensions_select_regex` parameter~~ and the DynamoDB special use-cases. Any help and/or criticism is welcome!
 
-_`dimensions_select_regex` has been added [here](https://github.com/Technofy/cloudwatch_exporter/commit/880ea50f22f23497abaf02b1d306ccdb71cc7c58)
+_`dimensions_select_regex` has been added [here](https://github.com/mtlang/cloudwatch_exporter/commit/880ea50f22f23497abaf02b1d306ccdb71cc7c58)
 
 ## End Note
 
 This exporter is largely inspired by the [official CloudWatch Exporter](https://github.com/prometheus/cloudwatch_exporter) and we'd like to thank all the contributors who participated to the original project.
 
-This project is licensed under the [Apache 2.0 license](https://github.com/Technofy/cloudwatch_exporter/blob/master/LICENSE).
+This project is licensed under the [Apache 2.0 license](https://github.com/mtlang/cloudwatch_exporter/blob/master/LICENSE).

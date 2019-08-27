@@ -1,13 +1,13 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
+// Metric is the smallest unit of scraping. It represents metrics from a single namespace in Cloudwatch Metrics.
 type Metric struct {
 	Namespace string `yaml:"aws_namespace"`
 	Name      string `yaml:"aws_metric_name"`
@@ -15,7 +15,7 @@ type Metric struct {
 	Statistics            []string            `yaml:"aws_statistics"`
 	Dimensions            []string            `yaml:"aws_dimensions,omitempty"`
 	DimensionsSelect      map[string][]string `yaml:"aws_dimensions_select,omitempty"`
-	DimensionsSelectRegex      map[string]string `yaml:"aws_dimensions_select_regex,omitempty"`
+	DimensionsSelectRegex map[string]string   `yaml:"aws_dimensions_select_regex,omitempty"`
 	DimensionsSelectParam map[string][]string `yaml:"aws_dimensions_select_param,omitempty"`
 
 	RangeSeconds  int `yaml:"range_seconds,omitempty"`
@@ -23,28 +23,47 @@ type Metric struct {
 	DelaySeconds  int `yaml:"delay_seconds,omitempty"`
 }
 
+// Task represents a single task. A task is confined to a single region and a single account.
 type Task struct {
 	Name          string   `yaml:"name"`
 	DefaultRegion string   `yaml:"default_region,omitempty"`
 	Metrics       []Metric `yaml:"metrics"`
+	RoleArn       string   `yaml:"role_arn,omitempty"`
 }
 
+// Settings is a top level struct representing the settings file.
+// It divides what is scraped into several "tasks"
 type Settings struct {
 	AutoReload  bool   `yaml:"auto_reload,omitempty"`
 	ReloadDelay int    `yaml:"auto_reload_delay,omitempty"`
 	Tasks       []Task `yaml:"tasks"`
 }
 
-func (s *Settings) GetTask(name string) (*Task, error) {
-	for i := range s.Tasks {
-		if strings.Compare(s.Tasks[i].Name, name) == 0 {
-			return &s.Tasks[i], nil
+// GetTasks returns all tasks with a given name
+func (settings *Settings) GetTasks(name string) ([]*Task, error) {
+	var taskList []*Task
+	for _, task := range settings.Tasks {
+		if task.Name == name {
+			// Add the task to the list (with a deep copy)
+			newTask := new(Task)
+			newTask.DefaultRegion = task.DefaultRegion
+			newTask.Metrics = *new([]Metric)
+			for _, metric := range task.Metrics {
+				newTask.Metrics = append(newTask.Metrics, metric)
+			}
+			newTask.Name = task.Name
+			newTask.RoleArn = task.RoleArn
+			taskList = append(taskList, newTask)
 		}
 	}
+	if len(taskList) > 0 {
+		return taskList, nil
+	}
 
-	return nil, errors.New(fmt.Sprintf("can't find task '%s' in configuration", name))
+	return nil, fmt.Errorf("can't find task '%s' in configuration", name)
 }
 
+// Load returns a settings struct loaded from a given file
 func Load(filename string) (*Settings, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -59,6 +78,7 @@ func Load(filename string) (*Settings, error) {
 	return cfg, nil
 }
 
+// UnmarshalYAML unmarshalls
 func (m *Metric) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type plain Metric
 

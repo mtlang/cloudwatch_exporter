@@ -31,7 +31,7 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/technofy/cloudwatch_exporter"
+  name = "github.com/mtlang/cloudwatch_exporter"
 
 [[constraint]]
   name = "gopkg.in/yaml.v2"
