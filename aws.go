@@ -30,8 +30,9 @@ func getLatestDatapoint(datapoints []*cloudwatch.Datapoint) *cloudwatch.Datapoin
 func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 	session := session.Must(session.NewSession())
 	var svc *cloudwatch.CloudWatch
-	for _, region := range collector.Regions {
-		roleArn := collector.Template[region].Task.RoleArn
+	for _, template := range collector.Templates {
+		region := template.Task.Region
+		roleArn := template.Task.RoleArn
 		if len(roleArn) > 0 {
 			roleCreds := stscreds.NewCredentials(session, roleArn)
 			svc = cloudwatch.New(session, aws.NewConfig().WithCredentials(roleCreds).WithRegion(region))
@@ -39,8 +40,8 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 			svc = cloudwatch.New(session, aws.NewConfig().WithRegion(region))
 		}
 	
-		for m := range collector.Template[region].Metrics {
-			metric := &collector.Template[region].Metrics[m]
+		for m := range template.Metrics {
+			metric := &template.Metrics[m]
 	
 			now := time.Now()
 			end := now.Add(time.Duration(-metric.ConfMetric.DelaySeconds) * time.Second)
@@ -101,9 +102,9 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 			}
 	
 			if len(dimensions) > 0 || len(metric.ConfMetric.Dimensions) == 0 {
-				labels = append(labels, collector.Template[region].Task.Name)
+				labels = append(labels, template.Task.Name)
 				labels = append(labels, region)
-				roleArn = collector.Template[region].Task.RoleArn
+				roleArn = template.Task.RoleArn
 				if len(roleArn) > 0 {
 					labels = append(labels, strings.Split(roleArn, ":")[4])
 				} else {
@@ -182,9 +183,9 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 	
 					params.Dimensions = dimensions
 	
-					labels = append(labels, collector.Template[region].Task.Name)
+					labels = append(labels, template.Task.Name)
 					labels = append(labels, region)
-					roleArn = collector.Template[region].Task.RoleArn
+					roleArn = template.Task.RoleArn
 					if len(roleArn) > 0 {
 						labels = append(labels, strings.Split(roleArn, ":")[4])
 					} else {

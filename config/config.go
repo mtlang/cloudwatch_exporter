@@ -26,7 +26,7 @@ type Metric struct {
 // Task represents a single task. A task is confined to a single region and a single account.
 type Task struct {
 	Name          string   `yaml:"name"`
-	DefaultRegion string   `yaml:"default_region,omitempty"`
+	Region 		  string   `yaml:"region,omitempty"`
 	Metrics       []Metric `yaml:"metrics"`
 	RoleArn       string   `yaml:"role_arn,omitempty"`
 }
@@ -46,7 +46,7 @@ func (settings *Settings) GetTasks(name string) ([]*Task, error) {
 		if task.Name == name {
 			// Add the task to the list (with a deep copy)
 			newTask := new(Task)
-			newTask.DefaultRegion = task.DefaultRegion
+			newTask.Region = task.Region
 			newTask.Metrics = *new([]Metric)
 			for _, metric := range task.Metrics {
 				newTask.Metrics = append(newTask.Metrics, metric)

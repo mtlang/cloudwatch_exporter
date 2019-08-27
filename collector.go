@@ -1,16 +1,11 @@
 package main
 
 import (
-	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/mtlang/cloudwatch_exporter/config"
-)
-
-var (
-	templates = map[string]map[string]*cwCollectorTemplate{}
 )
 
 type cwMetric struct {
@@ -28,12 +23,13 @@ type cwCollectorTemplate struct {
 }
 
 type cwCollector struct {
-	Regions           []string
 	Target            string
 	ScrapeTime        prometheus.Gauge
 	ErroneousRequests prometheus.Counter
-	Template          map[string]*cwCollectorTemplate
+	Templates         []*cwCollectorTemplate
 }
+
+var templates []*cwCollectorTemplate
 
 // generateTemplates creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
 func generateTemplates(cfg *config.Settings) {
@@ -42,7 +38,7 @@ func generateTemplates(cfg *config.Settings) {
 
 		// Save the task it belongs to (Perform a deep copy)
 		template.Task = new(config.Task)
-		template.Task.DefaultRegion = task.DefaultRegion
+		template.Task.Region = task.Region
 		template.Task.Metrics = *new([]config.Metric)
 		for _, metric := range task.Metrics {
 			template.Task.Metrics = append(template.Task.Metrics, metric)
@@ -77,10 +73,7 @@ func generateTemplates(cfg *config.Settings) {
 			}
 		}
 
-		if templates[task.Name] == nil {
-			templates[task.Name] = make(map[string]*cwCollectorTemplate)
-		}
-		templates[task.Name][task.DefaultRegion] = template
+		templates = append(templates, template)
 	}
 }
 
@@ -89,27 +82,13 @@ func generateTemplates(cfg *config.Settings) {
 // It returns either a pointer to a new instance of cwCollector or an error.
 func NewCwCollector(target string, taskName string, region string) (*cwCollector, error) {
 	// Check if task exists
-	tasks, err := settings.GetTasks(taskName)
+	_, err := settings.GetTasks(taskName)
 
 	if err != nil {
 		return nil, err
 	}
 
-	var regionsToCollect []string
-
-	if region == "" {
-		for _, task := range tasks {
-			if task.DefaultRegion == "" {
-				return nil, errors.New("No region or default region set requested task")
-			}
-			regionsToCollect = append(regionsToCollect, task.DefaultRegion)
-		}
-	} else {
-		regionsToCollect = []string{region}
-	}
-
 	return &cwCollector{
-		Regions: regionsToCollect,
 		Target:  target,
 		ScrapeTime: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "cloudwatch_exporter_scrape_duration_seconds",
@@ -119,7 +98,7 @@ func NewCwCollector(target string, taskName string, region string) (*cwCollector
 			Name: "cloudwatch_exporter_erroneous_requests",
 			Help: "The number of erroneous request made by this scrape.",
 		}),
-		Template: templates[taskName],
+		Templates: templates,
 	}, nil
 }
 
@@ -136,8 +115,8 @@ func (collector *cwCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.ScrapeTime.Desc()
 	ch <- collector.ErroneousRequests.Desc()
 
-	for region := range collector.Template {
-		for _, metric := range collector.Template[region].Metrics {
+	for region := range collector.Templates {
+		for _, metric := range collector.Templates[region].Metrics {
 			ch <- metric.Desc
 		}
 	}
