@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/mtlang/cloudwatch_exporter/config"
@@ -31,49 +35,84 @@ type cwCollector struct {
 
 var templates []*cwCollectorTemplate
 
+func buildTemplate(task config.Task) *cwCollectorTemplate {
+	var template = new(cwCollectorTemplate)
+
+	// Save the task it belongs to (Perform a deep copy)
+	template.Task = new(config.Task)
+	template.Task.Region = task.Region
+	template.Task.Metrics = *new([]config.Metric)
+	for _, metric := range task.Metrics {
+		template.Task.Metrics = append(template.Task.Metrics, metric)
+	}
+	template.Task.Name = task.Name
+	template.Task.RoleArn = task.RoleArn
+
+	//Pre-allocate at least a few metrics
+	template.Metrics = make([]cwMetric, 0, len(task.Metrics))
+
+	for _, metric := range task.Metrics {
+		labels := make([]string, len(metric.Dimensions))
+
+		for i, dimension := range metric.Dimensions {
+			labels[i] = toSnakeCase(dimension)
+		}
+		labels = append(labels, "task")
+		labels = append(labels, "region")
+		labels = append(labels, "account")
+
+		for _, statistic := range metric.Statistics {
+			template.Metrics = append(template.Metrics, cwMetric{
+				Desc: prometheus.NewDesc(
+					safeName(toSnakeCase(fmt.Sprintf("%s_%s_%s", metric.Namespace, metric.Name, statistic))),
+					fmt.Sprintf("%s %s", metric.Namespace, metric.Name),
+					labels,
+					nil),
+				ValType:    prometheus.GaugeValue,
+				ConfMetric: &metric,
+				LabelNames: labels,
+			})
+		}
+	}
+
+	return template
+}
+
+func getAllRegions() []string {
+	regionList := []string{}
+	session := session.Must(session.NewSession())
+	svc := ec2.New(session)
+	result, err := svc.DescribeRegions(nil)
+	if err != nil {
+		println(err.Error())
+		return regionList
+	}
+
+	for _, region := range result.Regions {
+		regionList = append(regionList, *region.RegionName)
+	}
+
+	return regionList
+}
+
 // generateTemplates creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
 func generateTemplates(cfg *config.Settings) {
+	templates = []*cwCollectorTemplate{}
+
 	for _, task := range cfg.Tasks {
-		var template = new(cwCollectorTemplate)
+		if strings.EqualFold(task.Region, "all") {
+			regions := getAllRegions()
 
-		// Save the task it belongs to (Perform a deep copy)
-		template.Task = new(config.Task)
-		template.Task.Region = task.Region
-		template.Task.Metrics = *new([]config.Metric)
-		for _, metric := range task.Metrics {
-			template.Task.Metrics = append(template.Task.Metrics, metric)
-		}
-		template.Task.Name = task.Name
-		template.Task.RoleArn = task.RoleArn
+			for _, region := range regions {
+				task.Region = region
 
-		//Pre-allocate at least a few metrics
-		template.Metrics = make([]cwMetric, 0, len(task.Metrics))
-
-		for _, metric := range task.Metrics {
-			labels := make([]string, len(metric.Dimensions))
-
-			for i, dimension := range metric.Dimensions {
-				labels[i] = toSnakeCase(dimension)
+				template := buildTemplate(task)
+				templates = append(templates, template)
 			}
-			labels = append(labels, "task")
-			labels = append(labels, "region")
-			labels = append(labels, "account")
-
-			for s := range metric.Statistics {
-				template.Metrics = append(template.Metrics, cwMetric{
-					Desc: prometheus.NewDesc(
-						safeName(toSnakeCase(metric.Namespace)+"_"+toSnakeCase(metric.Name)+"_"+toSnakeCase(metric.Statistics[s])),
-						metric.Name,
-						labels,
-						nil),
-					ValType:    prometheus.GaugeValue,
-					ConfMetric: &metric,
-					LabelNames: labels,
-				})
-			}
+		} else {
+			template := buildTemplate(task)
+			templates = append(templates, template)
 		}
-
-		templates = append(templates, template)
 	}
 }
 
@@ -89,7 +128,7 @@ func NewCwCollector(target string, taskName string, region string) (*cwCollector
 	}
 
 	return &cwCollector{
-		Target:  target,
+		Target: target,
 		ScrapeTime: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "cloudwatch_exporter_scrape_duration_seconds",
 			Help: "Time this CloudWatch scrape took, in seconds.",
