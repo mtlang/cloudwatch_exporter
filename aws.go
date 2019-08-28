@@ -31,7 +31,7 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 	session := session.Must(session.NewSession())
 	var svc *cloudwatch.CloudWatch
 	region := template.Task.Region
-	roleArn := template.Task.RoleArn
+	roleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s",template.Task.Account,template.Task.RoleName)
 	if len(roleArn) > 0 {
 		roleCreds := stscreds.NewCredentials(session, roleArn)
 		svc = cloudwatch.New(session, aws.NewConfig().WithCredentials(roleCreds).WithRegion(region))
@@ -103,9 +103,9 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 		if len(dimensions) > 0 || len(metric.ConfMetric.Dimensions) == 0 {
 			labels = append(labels, template.Task.Name)
 			labels = append(labels, region)
-			roleArn = template.Task.RoleArn
-			if len(roleArn) > 0 {
-				labels = append(labels, strings.Split(roleArn, ":")[4])
+			account := template.Task.Account
+			if len(account) > 0 {
+				labels = append(labels, account)
 			} else {
 				labels = append(labels, "Not Specified")
 			}
@@ -184,9 +184,9 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 
 				labels = append(labels, template.Task.Name)
 				labels = append(labels, region)
-				roleArn = template.Task.RoleArn
-				if len(roleArn) > 0 {
-					labels = append(labels, strings.Split(roleArn, ":")[4])
+				account := template.Task.Account
+				if len(account) > 0 {
+					labels = append(labels, account)
 				} else {
 					labels = append(labels, "Not Specified")
 				}

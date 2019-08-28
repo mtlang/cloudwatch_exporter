@@ -25,18 +25,20 @@ type Metric struct {
 
 // Task represents a single task. A task is confined to a single region and a single account.
 type Task struct {
-	Name          string   `yaml:"name"`
-	Region 		  string   `yaml:"region,omitempty"`
-	Metrics       []Metric `yaml:"metrics"`
-	RoleArn       string   `yaml:"role_arn,omitempty"`
+	Name     string   `yaml:"name"`
+	Region   string   `yaml:"region,omitempty"`
+	Metrics  []Metric `yaml:"metrics"`
+	RoleName string   `yaml:"role_name,omitempty"`
+	Account  string   `yaml:"account,omitempty"`
 }
 
 // Settings is a top level struct representing the settings file.
 // It divides what is scraped into several "tasks"
 type Settings struct {
-	AutoReload  bool   `yaml:"auto_reload,omitempty"`
-	ReloadDelay int    `yaml:"auto_reload_delay,omitempty"`
-	Tasks       []Task `yaml:"tasks"`
+	AutoReload  bool     `yaml:"auto_reload,omitempty"`
+	ReloadDelay int      `yaml:"auto_reload_delay,omitempty"`
+	Accounts    []string `yaml:"accounts,omitempty"`
+	Tasks       []Task   `yaml:"tasks"`
 }
 
 // GetTasks returns all tasks with a given name
@@ -52,7 +54,8 @@ func (settings *Settings) GetTasks(name string) ([]*Task, error) {
 				newTask.Metrics = append(newTask.Metrics, metric)
 			}
 			newTask.Name = task.Name
-			newTask.RoleArn = task.RoleArn
+			newTask.Account = task.Account
+			newTask.RoleName = task.RoleName
 			taskList = append(taskList, newTask)
 		}
 	}

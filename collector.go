@@ -46,7 +46,8 @@ func buildTemplate(task config.Task) *cwCollectorTemplate {
 		template.Task.Metrics = append(template.Task.Metrics, metric)
 	}
 	template.Task.Name = task.Name
-	template.Task.RoleArn = task.RoleArn
+	template.Task.RoleName = task.RoleName
+	template.Task.Account = task.Account
 
 	//Pre-allocate at least a few metrics
 	template.Metrics = make([]cwMetric, 0, len(task.Metrics))
@@ -98,20 +99,36 @@ func getAllRegions() []string {
 // generateTemplates creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
 func generateTemplates(cfg *config.Settings) {
 	templates = []*cwCollectorTemplate{}
+	allRegions := getAllRegions()
 
 	for _, task := range cfg.Tasks {
-		if strings.EqualFold(task.Region, "all") {
-			regions := getAllRegions()
+		if strings.EqualFold(task.Account, "all") {
+			for _, account := range cfg.Accounts {
+				task.Account = account
+				if strings.EqualFold(task.Region, "all") {
+					for _, region := range allRegions {
+						task.Region = region
+	
+						template := buildTemplate(task)
+						templates = append(templates, template)
+					}
+				} else {
+					template := buildTemplate(task)
+					templates = append(templates, template)
+				}
+			}
+		} else {
+			if strings.EqualFold(task.Region, "all") {
+				for _, region := range allRegions {
+					task.Region = region
 
-			for _, region := range regions {
-				task.Region = region
-
+					template := buildTemplate(task)
+					templates = append(templates, template)
+				}
+			} else {
 				template := buildTemplate(task)
 				templates = append(templates, template)
 			}
-		} else {
-			template := buildTemplate(task)
-			templates = append(templates, template)
 		}
 	}
 }
