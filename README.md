@@ -1,3 +1,9 @@
+# Mass Cloudwatch Exporter
+
+This fork was made to build off of the work done by [Technofy's Cloudwatch Exporter](https://github.com/Technofy/cloudwatch_exporter). The goal of this project is to create a cloudwatch exporter that can easily scale to monitor resources across many AWS accounts and many AWS regions. Where other exporters would require an instance to be run in every account or every region, this project aims to monitor an entire AWS landscape and make all gathered information available from a single endpoint. Where other exporters aim to monitor many metrics within a single account and region, this exporter aims to monitor a small number of metrics across many accounts and regions. 
+
+The project is still very much in active development, and it remains to be seen whether it will be performant enough to be practical. The following is the original readme for Technofy's Cloudwatch Exporter. Some parts may be inaccurate, it will be rewritten if the project is successful.
+
 # CloudWatch Exporter
 
 An [AWS CloudWatch](http://aws.amazon.com/cloudwatch/) exporter for [Prometheus](https://github.com/prometheus/prometheus) coded in Go, with multi-region and dynamic target support.
