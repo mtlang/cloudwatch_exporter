@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -82,8 +83,8 @@ func buildTemplate(task config.Task) *cwCollectorTemplate {
 func getAllRegions() []string {
 	regionList := []string{}
 	session := session.Must(session.NewSession())
-	svc := ec2.New(session)
-	result, err := svc.DescribeRegions(nil)
+	svc := ec2.New(session, &aws.Config{Region: aws.String("us-east-1")})
+	result, err := svc.DescribeRegions(&ec2.DescribeRegionsInput{})
 	if err != nil {
 		println(err.Error())
 		return regionList
@@ -103,11 +104,12 @@ func generateTemplates(cfg *config.Settings) {
 
 	for _, task := range cfg.Tasks {
 		if strings.EqualFold(task.Account, "all") {
+			region := task.Region
 			for _, account := range cfg.Accounts {
 				task.Account = account
-				if strings.EqualFold(task.Region, "all") {
-					for _, region := range allRegions {
-						task.Region = region
+				if strings.EqualFold(region, "all") {
+					for _, regionToAdd := range allRegions {
+						task.Region = regionToAdd
 	
 						template := buildTemplate(task)
 						templates = append(templates, template)
@@ -139,7 +141,6 @@ func generateTemplates(cfg *config.Settings) {
 func NewCwCollector(target string, taskName string, region string) (*cwCollector, error) {
 	// Check if task exists
 	_, err := settings.GetTasks(taskName)
-
 	if err != nil {
 		return nil, err
 	}
