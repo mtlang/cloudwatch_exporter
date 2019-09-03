@@ -14,6 +14,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type scrapeSingleDataPointInput struct {
+	collector *cwCollector
+	ch        chan<- prometheus.Metric
+	params    *cloudwatch.GetMetricStatisticsInput
+	metric    *cwMetric
+	labels    []string
+	svc       *cloudwatch.CloudWatch
+}
+
 func getLatestDatapoint(datapoints []*cloudwatch.Datapoint) *cloudwatch.Datapoint {
 	var latest *cloudwatch.Datapoint
 
@@ -28,10 +37,13 @@ func getLatestDatapoint(datapoints []*cloudwatch.Datapoint) *cloudwatch.Datapoin
 
 func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, template *cwCollectorTemplate, wg *sync.WaitGroup) {
 	defer wg.Done()
+	
+	var innerWg sync.WaitGroup
+
 	session := session.Must(session.NewSession())
 	var svc *cloudwatch.CloudWatch
 	region := template.Task.Region
-	roleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s",template.Task.Account,template.Task.RoleName)
+	roleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s", template.Task.Account, template.Task.RoleName)
 	if len(roleArn) > 0 {
 		roleCreds := stscreds.NewCredentials(session, roleArn)
 		svc = cloudwatch.New(session, aws.NewConfig().WithCredentials(roleCreds).WithRegion(region))
@@ -40,18 +52,18 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 	}
 
 	for m := range template.Metrics {
-		metric := &template.Metrics[m]
+		configMetric := &template.Metrics[m]
 
 		now := time.Now()
-		end := now.Add(time.Duration(-metric.ConfMetric.DelaySeconds) * time.Second)
+		end := now.Add(time.Duration(-configMetric.ConfMetric.DelaySeconds) * time.Second)
 
 		params := &cloudwatch.GetMetricStatisticsInput{
 			EndTime:   aws.Time(end),
-			StartTime: aws.Time(end.Add(time.Duration(-metric.ConfMetric.RangeSeconds) * time.Second)),
+			StartTime: aws.Time(end.Add(time.Duration(-configMetric.ConfMetric.RangeSeconds) * time.Second)),
 
-			Period:     aws.Int64(int64(metric.ConfMetric.PeriodSeconds)),
-			MetricName: aws.String(metric.ConfMetric.Name),
-			Namespace:  aws.String(metric.ConfMetric.Namespace),
+			Period:     aws.Int64(int64(configMetric.ConfMetric.PeriodSeconds)),
+			MetricName: aws.String(configMetric.ConfMetric.Name),
+			Namespace:  aws.String(configMetric.ConfMetric.Namespace),
 			Dimensions: []*cloudwatch.Dimension{},
 			Statistics: []*string{},
 			Unit:       nil,
@@ -62,29 +74,29 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 		//This map will hold dimensions name which has been already collected
 		valueCollected := map[string]bool{}
 
-		if len(metric.ConfMetric.DimensionsSelectRegex) == 0 {
-			metric.ConfMetric.DimensionsSelectRegex = map[string]string{}
+		if len(configMetric.ConfMetric.DimensionsSelectRegex) == 0 {
+			configMetric.ConfMetric.DimensionsSelectRegex = map[string]string{}
 		}
 
 		//Check for dimensions who does not have either select or dimensions select_regex and make them select everything using regex
-		for _, dimension := range metric.ConfMetric.Dimensions {
-			_, found := metric.ConfMetric.DimensionsSelect[dimension]
-			_, found2 := metric.ConfMetric.DimensionsSelectRegex[dimension]
+		for _, dimension := range configMetric.ConfMetric.Dimensions {
+			_, found := configMetric.ConfMetric.DimensionsSelect[dimension]
+			_, found2 := configMetric.ConfMetric.DimensionsSelectRegex[dimension]
 			if !found && !found2 {
-				metric.ConfMetric.DimensionsSelectRegex[dimension] = ".*"
+				configMetric.ConfMetric.DimensionsSelectRegex[dimension] = ".*"
 			}
 		}
 
-		for _, stat := range metric.ConfMetric.Statistics {
+		for _, stat := range configMetric.ConfMetric.Statistics {
 			params.Statistics = append(params.Statistics, aws.String(stat))
 		}
 
-		labels := make([]string, 0, len(metric.LabelNames))
+		labels := make([]string, 0, len(configMetric.LabelNames))
 
 		// Loop through the dimensions selects to build the filters and the labels array
-		for dim := range metric.ConfMetric.DimensionsSelect {
-			for val := range metric.ConfMetric.DimensionsSelect[dim] {
-				dimValue := metric.ConfMetric.DimensionsSelect[dim][val]
+		for dim := range configMetric.ConfMetric.DimensionsSelect {
+			for val := range configMetric.ConfMetric.DimensionsSelect[dim] {
+				dimValue := configMetric.ConfMetric.DimensionsSelect[dim][val]
 
 				// Replace $_target token by the actual URL target
 				if dimValue == "$_target" {
@@ -100,7 +112,7 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 			}
 		}
 
-		if len(dimensions) > 0 || len(metric.ConfMetric.Dimensions) == 0 {
+		if len(dimensions) > 0 || len(configMetric.ConfMetric.Dimensions) == 0 {
 			labels = append(labels, template.Task.Name)
 			labels = append(labels, region)
 			account := template.Task.Account
@@ -110,18 +122,19 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 				labels = append(labels, "Not Specified")
 			}
 			params.Dimensions = dimensions
-			scrapeSingleDataPoint(collector, ch, params, metric, labels, svc)
+			innerWg.Add(1)
+			scrapeSingleDataPoint(collector, ch, params, configMetric, labels, svc, &innerWg)
 		}
 
 		//If no regex is specified, continue
-		if len(metric.ConfMetric.DimensionsSelectRegex) == 0 {
+		if len(configMetric.ConfMetric.DimensionsSelectRegex) == 0 {
 			continue
 		}
 
 		// Get all the metric to select the ones who'll match the regex
 		result, err := svc.ListMetrics(&cloudwatch.ListMetricsInput{
-			MetricName: aws.String(metric.ConfMetric.Name),
-			Namespace:  aws.String(metric.ConfMetric.Namespace),
+			MetricName: aws.String(configMetric.ConfMetric.Name),
+			Namespace:  aws.String(configMetric.ConfMetric.Namespace),
 		})
 		nextToken := result.NextToken
 		metrics := result.Metrics
@@ -134,8 +147,8 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 
 		for nextToken != nil {
 			result, err := svc.ListMetrics(&cloudwatch.ListMetricsInput{
-				MetricName: aws.String(metric.ConfMetric.Name),
-				Namespace:  aws.String(metric.ConfMetric.Namespace),
+				MetricName: aws.String(configMetric.ConfMetric.Name),
+				Namespace:  aws.String(configMetric.ConfMetric.Namespace),
 				NextToken:  nextToken,
 			})
 			if err != nil {
@@ -148,14 +161,14 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 
 		//For each metric returned by aws
 		for _, met := range result.Metrics {
-			labels := make([]string, 0, len(metric.LabelNames))
+			labels := make([]string, 0, len(configMetric.LabelNames))
 			dimensions = []*cloudwatch.Dimension{}
 
 			//Try to match each dimensions to the regex
 			for _, dim := range met.Dimensions {
-				dimRegex := metric.ConfMetric.DimensionsSelectRegex[*dim.Name]
+				dimRegex := configMetric.ConfMetric.DimensionsSelectRegex[*dim.Name]
 				if dimRegex == "" {
-					dimRegex = "\\b" + strings.Join(metric.ConfMetric.DimensionsSelect[*dim.Name], "\\b|\\b") + "\\b"
+					dimRegex = "\\b" + strings.Join(configMetric.ConfMetric.DimensionsSelect[*dim.Name], "\\b|\\b") + "\\b"
 				}
 
 				match, _ := regexp.MatchString(dimRegex, *dim.Value)
@@ -170,7 +183,7 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 			}
 
 			//Cheking if all dimensions matched
-			if len(labels) == len(metric.ConfMetric.Dimensions) {
+			if len(labels) == len(configMetric.ConfMetric.Dimensions) {
 
 				//Checking if this couple of dimensions has already been scraped
 				if _, ok := valueCollected[strings.Join(labels, ";")]; ok {
@@ -190,10 +203,12 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 				} else {
 					labels = append(labels, "Not Specified")
 				}
-				scrapeSingleDataPoint(collector, ch, params, metric, labels, svc)
+				innerWg.Add(1)
+				go scrapeSingleDataPoint(collector, ch, params, configMetric, labels, svc, &innerWg)
 			}
 		}
 	}
+	innerWg.Wait()
 }
 
 // scrape makes the required calls to AWS CloudWatch by using the parameters in the cwCollector
@@ -208,8 +223,8 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 }
 
 //Send a single dataPoint to the Prometheus lib
-func scrapeSingleDataPoint(collector *cwCollector, ch chan<- prometheus.Metric, params *cloudwatch.GetMetricStatisticsInput, metric *cwMetric, labels []string, svc *cloudwatch.CloudWatch) error {
-
+func scrapeSingleDataPoint(collector *cwCollector, ch chan<- prometheus.Metric, params *cloudwatch.GetMetricStatisticsInput, metric *cwMetric, labels []string, svc *cloudwatch.CloudWatch, wg *sync.WaitGroup) error {
+	defer wg.Done()
 	resp, err := svc.GetMetricStatistics(params)
 	totalRequests.Inc()
 
