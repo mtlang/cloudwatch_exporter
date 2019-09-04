@@ -149,11 +149,19 @@ func NewCwCollector(target string, taskName string, region string) (*cwCollector
 	if region != "" {
 		templatesToUse = []*cwCollectorTemplate{}
 		for _, template := range templates {
-			if template.Task.Region == region {
+			if template.Task.Region == region && template.Task.Name == taskName {
+				templatesToUse = append(templatesToUse, template)
+			}
+		}
+	} else {
+		templatesToUse = []*cwCollectorTemplate{}
+		for _, template := range templates {
+			if template.Task.Name == taskName {
 				templatesToUse = append(templatesToUse, template)
 			}
 		}
 	}
+	
 
 	return &cwCollector{
 		Target: target,

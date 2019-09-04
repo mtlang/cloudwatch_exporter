@@ -34,8 +34,8 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 	session := session.Must(session.NewSession())
 	var svc *cloudwatch.CloudWatch
 	region := template.Task.Region
-	roleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s", template.Task.Account, template.Task.RoleName)
-	if len(roleArn) > 0 {
+	if len(template.Task.Account) > 0 && len(template.Task.RoleName) > 0 {
+		roleArn := fmt.Sprintf("arn:aws:iam::%s:role/%s", template.Task.Account, template.Task.RoleName)
 		roleCreds := stscreds.NewCredentials(session, roleArn)
 		svc = cloudwatch.New(session, aws.NewConfig().WithCredentials(roleCreds).WithRegion(region))
 	} else {
