@@ -14,15 +14,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type scrapeSingleDataPointInput struct {
-	collector *cwCollector
-	ch        chan<- prometheus.Metric
-	params    *cloudwatch.GetMetricStatisticsInput
-	metric    *cwMetric
-	labels    []string
-	svc       *cloudwatch.CloudWatch
-}
-
 func getLatestDatapoint(datapoints []*cloudwatch.Datapoint) *cloudwatch.Datapoint {
 	var latest *cloudwatch.Datapoint
 
@@ -37,7 +28,7 @@ func getLatestDatapoint(datapoints []*cloudwatch.Datapoint) *cloudwatch.Datapoin
 
 func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, template *cwCollectorTemplate, wg *sync.WaitGroup) {
 	defer wg.Done()
-	
+
 	var innerWg sync.WaitGroup
 
 	session := session.Must(session.NewSession())
@@ -123,7 +114,7 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 			}
 			params.Dimensions = dimensions
 			innerWg.Add(1)
-			scrapeSingleDataPoint(collector, ch, params, configMetric, labels, svc, &innerWg)
+			scrapeSingleDataPoint(collector, ch, *params, configMetric, labels, svc, &innerWg)
 		}
 
 		//If no regex is specified, continue
@@ -204,8 +195,9 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 					labels = append(labels, "Not Specified")
 				}
 				innerWg.Add(1)
-				go scrapeSingleDataPoint(collector, ch, params, configMetric, labels, svc, &innerWg)
+				go scrapeSingleDataPoint(collector, ch, *params, configMetric, labels, svc, &innerWg)
 			}
+
 		}
 	}
 	innerWg.Wait()
@@ -223,9 +215,9 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 }
 
 //Send a single dataPoint to the Prometheus lib
-func scrapeSingleDataPoint(collector *cwCollector, ch chan<- prometheus.Metric, params *cloudwatch.GetMetricStatisticsInput, metric *cwMetric, labels []string, svc *cloudwatch.CloudWatch, wg *sync.WaitGroup) error {
+func scrapeSingleDataPoint(collector *cwCollector, ch chan<- prometheus.Metric, params cloudwatch.GetMetricStatisticsInput, metric *cwMetric, labels []string, svc *cloudwatch.CloudWatch, wg *sync.WaitGroup) error {
 	defer wg.Done()
-	resp, err := svc.GetMetricStatistics(params)
+	resp, err := svc.GetMetricStatistics(&params)
 	totalRequests.Inc()
 
 	if err != nil {
