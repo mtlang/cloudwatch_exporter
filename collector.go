@@ -145,6 +145,16 @@ func NewCwCollector(target string, taskName string, region string) (*cwCollector
 		return nil, err
 	}
 
+	templatesToUse := templates
+	if region != "" {
+		templatesToUse = []*cwCollectorTemplate{}
+		for _, template := range templates {
+			if template.Task.Region == region {
+				templatesToUse = append(templatesToUse, template)
+			}
+		}
+	}
+
 	return &cwCollector{
 		Target: target,
 		ScrapeTime: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -155,7 +165,7 @@ func NewCwCollector(target string, taskName string, region string) (*cwCollector
 			Name: "cloudwatch_exporter_erroneous_requests",
 			Help: "The number of erroneous request made by this scrape.",
 		}),
-		Templates: templates,
+		Templates: templatesToUse,
 	}, nil
 }
 
