@@ -49,17 +49,18 @@ A task is a group of metrics which you would like to be presented together. Metr
 In addition to a list of metrics and a unique identifier, each task can also have three optional fields. A 'region' can be specified or set to 'all'. An 'account' number can be specified, or set to 'all' to use the list defined at the top level. If 'account' is specified, you must also specify a 'role_name'. The exporter will attempt to assume the specified role in the specified account to gather metrics. If any of the optional fields are not specified, the default credential chain will be used instead.
 
 Each metric is defined by several fields:
+
 | Field Name | Type | Required? | Description |
 |------------|------|-----------|-------------|
-| aws_metric_name | string | Yes | Name of the metric. |
-| aws_namespace | string | Yes | The namespace of the metric. Supports custom namespaces. |
-| aws_dimensions | list of strings | No | Dimentions to aggregate metric across. Required for metrics with dimensions. |
-| aws_dimensions_select | map | No | Optional filter. Maps from name of dimension to acceptable values for dimension. |
-| aws_dimensions_select_regex | map | No | Optional filter. Maps from name of dimension to regex for values to match. |
+| aws_metric_name | string | Yes | Name of the metric. 
+| aws_namespace | string | Yes | The namespace of the metric. Supports custom namespaces. 
+| aws_dimensions | list of strings | No | Dimentions to aggregate metric across. Required for metrics with dimensions. 
+| aws_dimensions_select | map | No | Optional filter. Maps from name of dimension to acceptable values for dimension. 
+| aws_dimensions_select_regex | map | No | Optional filter. Maps from name of dimension to regex for values to match. 
 | aws_statistics | list of strings | Yes | Statistics to display. Doesn't support extended statistics. |
-| range_seconds | number | No | Length of metric window in seconds. |
-| delay_seconds | number | No | Delays the end of the metric window by x seconds. If 0, ends window at current time. |
-| period_seconds | number | No | Metric period. |
+| range_seconds | number | No | Length of metric window in seconds. 
+| delay_seconds | number | No | Delays the end of the metric window by x seconds. If 0, ends window at current time. 
+| period_seconds | number | No | Metric period. 
 
 The **$_target** token in the dimensions select is used to pass a parameter given by Prometheus (for example a \__meta tag with service discovery).
 
