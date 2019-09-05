@@ -195,6 +195,7 @@ func scrapeTask(collector *Collector, ch chan<- prometheus.Metric, task *config.
 				} else {
 					labels = append(labels, "Not Specified")
 				}
+				labels = append(labels, "")
 				innerWg.Add(1)
 				go scrapeSingleDataPoint(collector, ch, *params, task, labels, svc, &innerWg)
 			}
@@ -235,22 +236,27 @@ func scrapeSingleDataPoint(collector *Collector, ch chan<- prometheus.Metric, pa
 	dp := getLatestDatapoint(resp.Datapoints)
 
 	if dp.Sum != nil {
+		labels[len(labels)-1] = "Sum"
 		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Sum), labels...)
 	}
 
 	if dp.Average != nil {
+		labels[len(labels)-1] = "Average"
 		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Average), labels...)
 	}
 
 	if dp.Maximum != nil {
+		labels[len(labels)-1] = "Maximum"
 		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Maximum), labels...)
 	}
 
 	if dp.Minimum != nil {
+		labels[len(labels)-1] = "Minimum"
 		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Minimum), labels...)
 	}
 
 	if dp.SampleCount != nil {
+		labels[len(labels)-1] = "SampleCount"
 		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.SampleCount), labels...)
 	}
 	return nil

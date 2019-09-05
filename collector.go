@@ -46,6 +46,7 @@ func buildTask(task config.Task) *config.Task {
 		labels = append(labels, "task")
 		labels = append(labels, "region")
 		labels = append(labels, "account")
+		labels = append(labels, "statistic")
 
 		newTask.Desc = prometheus.NewDesc(
 			safeName(toSnakeCase(fmt.Sprintf("%s_%s", metric.Namespace, metric.Name))),
@@ -78,7 +79,7 @@ func getAllRegions() []string {
 
 // generateTasks creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
 func generateTasks(cfg *config.Settings) {
-	allRegions := getAllRegions()
+	tasks = []*config.Task{}
 
 	for _, task := range cfg.Tasks {
 		if strings.EqualFold(task.Account, "all") {
@@ -86,6 +87,9 @@ func generateTasks(cfg *config.Settings) {
 			for _, account := range cfg.Accounts {
 				task.Account = account
 				if strings.EqualFold(region, "all") {
+
+					allRegions := getAllRegions()
+					
 					for _, regionToAdd := range allRegions {
 						task.Region = regionToAdd
 
@@ -99,6 +103,9 @@ func generateTasks(cfg *config.Settings) {
 			}
 		} else {
 			if strings.EqualFold(task.Region, "all") {
+
+				allRegions := getAllRegions()
+				
 				for _, region := range allRegions {
 					task.Region = region
 
