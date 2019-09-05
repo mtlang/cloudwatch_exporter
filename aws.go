@@ -115,6 +115,7 @@ func scrapeTask(collector *Collector, ch chan<- prometheus.Metric, task *config.
 				labels = append(labels, "Not Specified")
 			}
 			params.Dimensions = dimensions
+			labels = append(labels, "")
 			innerWg.Add(1)
 			scrapeSingleDataPoint(collector, ch, *params, task, labels, svc, &innerWg)
 		}
