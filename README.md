@@ -9,7 +9,7 @@ This fork was made to extend the work done by [Technofy's CloudWatch Exporter](h
 To run the exporter, simply download the latest release for your platform. Alternatively, if you have Go installed, you can run the exporter from source. When invoking the exporter, you can specify the following flags:
 
 | Flag Name | Default Value | Description |
-|------------|------|-----------|-------------|
+|------------|------|-------------|
 | --web.listen-address | :9042 | Address on which to expose metrics. |
 | --web.telemetry-path | /metrics | Path under which to expose exporter's metrics. |
 | --web.telemetry-scrape-path | /scrape | Path under which to expose CloudWatch metrics. |
