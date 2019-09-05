@@ -37,7 +37,7 @@ func loadConfigFile() error {
 		return err
 	}
 
-	generateTemplates(tmpSettings)
+	generateTasks(tmpSettings)
 
 	settings = tmpSettings
 	configMutex.Unlock()
@@ -45,7 +45,7 @@ func loadConfigFile() error {
 	return nil
 }
 
-// handleReload handles a full reload of the configuration file and regenerates the collector templates.
+// handleReload handles a full reload of the configuration file and regenerates the collector tasks.
 func handleReload(w http.ResponseWriter, req *http.Request) {
 	err := loadConfigFile()
 	if err != nil {

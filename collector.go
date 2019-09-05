@@ -13,45 +13,29 @@ import (
 	"github.com/mtlang/cloudwatch_exporter/config"
 )
 
-type cwMetric struct {
-	Desc    *prometheus.Desc
-	ValType prometheus.ValueType
-
-	ConfMetric  *config.Metric
-	LabelNames  []string
-	LabelValues []string
-}
-
-type cwCollectorTemplate struct {
-	Metrics []cwMetric
-	Task    *config.Task
-}
-
-type cwCollector struct {
+// Collector represents a prometheus collector. A single collector is used for each scrape.
+type Collector struct {
 	Target            string
 	ScrapeTime        prometheus.Gauge
 	ErroneousRequests prometheus.Counter
-	Templates         []*cwCollectorTemplate
+	Tasks             []*config.Task
 }
 
-var templates []*cwCollectorTemplate
+var tasks []*config.Task
 
-func buildTemplate(task config.Task) *cwCollectorTemplate {
-	var template = new(cwCollectorTemplate)
+func buildTask(task config.Task) *config.Task {
+	var newTask = new(config.Task)
 
 	// Save the task it belongs to (Perform a deep copy)
-	template.Task = new(config.Task)
-	template.Task.Region = task.Region
-	template.Task.Metrics = *new([]config.Metric)
+	newTask = new(config.Task)
+	newTask.Region = task.Region
+	newTask.Metrics = *new([]config.Metric)
 	for _, metric := range task.Metrics {
-		template.Task.Metrics = append(template.Task.Metrics, metric)
+		newTask.Metrics = append(newTask.Metrics, metric)
 	}
-	template.Task.Name = task.Name
-	template.Task.RoleName = task.RoleName
-	template.Task.Account = task.Account
-
-	//Pre-allocate at least a few metrics
-	template.Metrics = make([]cwMetric, 0, len(task.Metrics))
+	newTask.Name = task.Name
+	newTask.RoleName = task.RoleName
+	newTask.Account = task.Account
 
 	for _, metric := range task.Metrics {
 		labels := make([]string, len(metric.Dimensions))
@@ -63,21 +47,16 @@ func buildTemplate(task config.Task) *cwCollectorTemplate {
 		labels = append(labels, "region")
 		labels = append(labels, "account")
 
-		for _, statistic := range metric.Statistics {
-			template.Metrics = append(template.Metrics, cwMetric{
-				Desc: prometheus.NewDesc(
-					safeName(toSnakeCase(fmt.Sprintf("%s_%s_%s", metric.Namespace, metric.Name, statistic))),
-					fmt.Sprintf("%s %s", metric.Namespace, metric.Name),
-					labels,
-					nil),
-				ValType:    prometheus.GaugeValue,
-				ConfMetric: &metric,
-				LabelNames: labels,
-			})
-		}
+		newTask.Desc = prometheus.NewDesc(
+			safeName(toSnakeCase(fmt.Sprintf("%s_%s", metric.Namespace, metric.Name))),
+			fmt.Sprintf("%s %s", metric.Namespace, metric.Name),
+			labels,
+			nil)
+		newTask.ValType = prometheus.GaugeValue
+		newTask.LabelNames = labels
 	}
 
-	return template
+	return newTask
 }
 
 func getAllRegions() []string {
@@ -97,9 +76,8 @@ func getAllRegions() []string {
 	return regionList
 }
 
-// generateTemplates creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
-func generateTemplates(cfg *config.Settings) {
-	templates = []*cwCollectorTemplate{}
+// generateTasks creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
+func generateTasks(cfg *config.Settings) {
 	allRegions := getAllRegions()
 
 	for _, task := range cfg.Tasks {
@@ -110,13 +88,13 @@ func generateTemplates(cfg *config.Settings) {
 				if strings.EqualFold(region, "all") {
 					for _, regionToAdd := range allRegions {
 						task.Region = regionToAdd
-	
-						template := buildTemplate(task)
-						templates = append(templates, template)
+
+						newTask := buildTask(task)
+						tasks = append(tasks, newTask)
 					}
 				} else {
-					template := buildTemplate(task)
-					templates = append(templates, template)
+					newTask := buildTask(task)
+					tasks = append(tasks, newTask)
 				}
 			}
 		} else {
@@ -124,46 +102,45 @@ func generateTemplates(cfg *config.Settings) {
 				for _, region := range allRegions {
 					task.Region = region
 
-					template := buildTemplate(task)
-					templates = append(templates, template)
+					newTask := buildTask(task)
+					tasks = append(tasks, newTask)
 				}
 			} else {
-				template := buildTemplate(task)
-				templates = append(templates, template)
+				newTask := buildTask(task)
+				tasks = append(tasks, newTask)
 			}
 		}
 	}
 }
 
 // NewCwCollector creates a new instance of a CwCollector for a specific task
-// The newly created instance will reference its parent template so that metric descriptions are not recreated on every call.
+// The newly created instance will reference its parent task so that metric descriptions are not recreated on every call.
 // It returns either a pointer to a new instance of cwCollector or an error.
-func NewCwCollector(target string, taskName string, region string) (*cwCollector, error) {
+func NewCwCollector(target string, taskName string, region string) (*Collector, error) {
 	// Check if task exists
 	_, err := settings.GetTasks(taskName)
 	if err != nil {
 		return nil, err
 	}
 
-	templatesToUse := templates
+	tasksToUse := tasks
 	if region != "" {
-		templatesToUse = []*cwCollectorTemplate{}
-		for _, template := range templates {
-			if template.Task.Region == region && template.Task.Name == taskName {
-				templatesToUse = append(templatesToUse, template)
+		tasksToUse = []*config.Task{}
+		for _, task := range tasks {
+			if task.Region == region && task.Name == taskName {
+				tasksToUse = append(tasksToUse, task)
 			}
 		}
 	} else {
-		templatesToUse = []*cwCollectorTemplate{}
-		for _, template := range templates {
-			if template.Task.Name == taskName {
-				templatesToUse = append(templatesToUse, template)
+		tasksToUse = []*config.Task{}
+		for _, task := range tasks {
+			if task.Name == taskName {
+				tasksToUse = append(tasksToUse, task)
 			}
 		}
 	}
-	
 
-	return &cwCollector{
+	return &Collector{
 		Target: target,
 		ScrapeTime: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "cloudwatch_exporter_scrape_duration_seconds",
@@ -173,11 +150,11 @@ func NewCwCollector(target string, taskName string, region string) (*cwCollector
 			Name: "cloudwatch_exporter_erroneous_requests",
 			Help: "The number of erroneous request made by this scrape.",
 		}),
-		Templates: templatesToUse,
+		Tasks: tasksToUse,
 	}, nil
 }
 
-func (collector *cwCollector) Collect(ch chan<- prometheus.Metric) {
+func (collector *Collector) Collect(ch chan<- prometheus.Metric) {
 	now := time.Now()
 	scrape(collector, ch)
 	collector.ScrapeTime.Set(time.Since(now).Seconds())
@@ -186,13 +163,11 @@ func (collector *cwCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- collector.ErroneousRequests
 }
 
-func (collector *cwCollector) Describe(ch chan<- *prometheus.Desc) {
+func (collector *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.ScrapeTime.Desc()
 	ch <- collector.ErroneousRequests.Desc()
 
-	for region := range collector.Templates {
-		for _, metric := range collector.Templates[region].Metrics {
-			ch <- metric.Desc
-		}
+	for _, task := range collector.Tasks {
+		ch <- task.Desc
 	}
 }
