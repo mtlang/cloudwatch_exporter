@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	listenAddress = flag.String("web.listen-address", ":9042", "Address on which to expose metrics and web interface.")
+	listenAddress = flag.String("web.listen-address", ":9042", "Address on which to expose metrics.")
 	metricsPath   = flag.String("web.telemetry-path", "/metrics", "Path under which to expose exporter's metrics.")
 	scrapePath    = flag.String("web.telemetry-scrape-path", "/scrape", "Path under which to expose CloudWatch metrics.")
 	configFile    = flag.String("config.file", "config.yml", "Path to configuration file.")

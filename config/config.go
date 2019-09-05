@@ -16,7 +16,6 @@ type Metric struct {
 	Dimensions            []string            `yaml:"aws_dimensions,omitempty"`
 	DimensionsSelect      map[string][]string `yaml:"aws_dimensions_select,omitempty"`
 	DimensionsSelectRegex map[string]string   `yaml:"aws_dimensions_select_regex,omitempty"`
-	DimensionsSelectParam map[string][]string `yaml:"aws_dimensions_select_param,omitempty"`
 
 	RangeSeconds  int `yaml:"range_seconds,omitempty"`
 	PeriodSeconds int `yaml:"period_seconds,omitempty"`
@@ -89,7 +88,7 @@ func (m *Metric) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	rawMetric := plain{
 		PeriodSeconds: 60,
 		RangeSeconds:  600,
-		DelaySeconds:  600,
+		DelaySeconds:  0,
 	}
 	if err := unmarshal(&rawMetric); err != nil {
 		return err

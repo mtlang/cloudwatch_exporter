@@ -127,14 +127,15 @@ func scrapeTemplate(collector *cwCollector, ch chan<- prometheus.Metric, templat
 			MetricName: aws.String(configMetric.ConfMetric.Name),
 			Namespace:  aws.String(configMetric.ConfMetric.Namespace),
 		})
-		nextToken := result.NextToken
-		metrics := result.Metrics
-		totalRequests.Inc()
-
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
+		nextToken := result.NextToken
+		metrics := result.Metrics
+		totalRequests.Inc()
+
+		
 
 		for nextToken != nil {
 			result, err := svc.ListMetrics(&cloudwatch.ListMetricsInput{

@@ -1,22 +1,91 @@
-# Mass Cloudwatch Exporter
+# Mass CloudWatch Exporter
 
-This fork was made to build off of the work done by [Technofy's Cloudwatch Exporter](https://github.com/Technofy/cloudwatch_exporter). The goal of this project is to create a cloudwatch exporter that can easily scale to monitor resources across many AWS accounts and many AWS regions. Where other exporters would require an instance to be run in every account or every region, this project aims to monitor an entire AWS landscape and make all gathered information available from a single endpoint. Where other exporters aim to monitor many metrics within a single account and region, this exporter aims to monitor a small number of metrics across many accounts and regions. 
+An [AWS CloudWatch](http://aws.amazon.com/cloudwatch/) exporter for [Prometheus](https://github.com/prometheus/prometheus) coded in Go, with multi-region, multi-account, and dynamic target support.
 
-The project is still very much in active development, and it remains to be seen whether it will be performant enough to be practical. The following is the original readme for Technofy's Cloudwatch Exporter. Some parts may be inaccurate, it will be rewritten if the project is successful.
+This fork was made to extend the work done by [Technofy's CloudWatch Exporter](https://github.com/Technofy/cloudwatch_exporter). The goal of this project is to create a cloudwatch exporter that can easily scale to monitor resources across many AWS accounts and many AWS regions. Where other exporters would require an instance to be run in every account or every region, this project aims to monitor an entire AWS landscape and make all gathered information available from a single endpoint. Where other exporters aim to monitor many metrics within a single account and region, this exporter aims to monitor a small number of metrics across many accounts and regions. 
 
-# CloudWatch Exporter
+## Running the Exporter
 
-An [AWS CloudWatch](http://aws.amazon.com/cloudwatch/) exporter for [Prometheus](https://github.com/prometheus/prometheus) coded in Go, with multi-region and dynamic target support.
+To run the exporter, simply download the latest release for your platform. Alternatively, if you have Go installed, you can run the exporter from source. When invoking the exporter, you can specify the following flags:
 
+| Flag Name | Default Value | Description |
+|------------|------|-----------|-------------|
+| --web.listen-address | :9042 | Address on which to expose metrics. |
+| --web.telemetry-path | /metrics | Path under which to expose exporter's metrics. |
+| --web.telemetry-scrape-path | /scrape | Path under which to expose CloudWatch metrics. |
+| --config.file | config.yml | Path to configuration file. |
 
-## How to configure
+## Configuration
 
-The configuration is in YAML and tries to stay in the same spirit as the official exporter.
+The exporter is configured with a single YAML file. The following demonstrates the structure of the configuration file:
 
 ```yaml
+accounts:
+ - 'aws_account_number_1'
+ - 'aws_account_number_2'
 tasks:
+  - name: 'unique_task_name'
+   region: 'aws_region' or 'all' (Optional)
+   account: 'aws_account_number' or 'all' (Optional)
+   role_name: 'name_of_role_to_assume' (Optional)
+   metrics:
+    - aws_namespace: 'cloudwatch_metric_namespace'
+      aws_dimensions: ['cloudwatch_metric_dimension_1', 'cloudwatch_metric_dimension_2'] (Optional)
+      aws_dimensions_select: (Optional)
+        <name_of_dimension>: ['value_of_dimension']
+      aws_dimensions_select_regex: (Optional)
+        <name_of_dimension>: 'regex_for_value_to_match'
+      aws_metric_name: 'cloudwatch_metric_name'
+      aws_statistics: ['metric_statistic_1', 'metric_statistic_2']
+      range_seconds: length_of_search_window_in_seconds (Defaults to 600)
+      period_seconds: aws_metric_period_in_seconds (Defaults to 60)
+      delay_seconds: delay_in_seconds (Defaults to 0)
+```
+### Configuration Fields
+At the top level of the configuration file are two fields: accounts and tasks. Accounts is just a list of AWS account numbers. This list is used by tasks that are set to scrape all accounts. 
+
+A task is a group of metrics which you would like to be presented together. Metrics are scraped by task, so only put metrics under the same task if you want them to always be presented together. 
+
+In addition to a list of metrics and a unique identifier, each task can also have three optional fields. A 'region' can be specified or set to 'all'. An 'account' number can be specified, or set to 'all' to use the list defined at the top level. If 'account' is specified, you must also specify a 'role_name'. The exporter will attempt to assume the specified role in the specified account to gather metrics. If any of the optional fields are not specified, the default credential chain will be used instead.
+
+Each metric is defined by several fields:
+| Field Name | Type | Required? | Description |
+|------------|------|-----------|-------------|
+| aws_metric_name | string | Yes | Name of the metric. |
+| aws_namespace | string | Yes | The namespace of the metric. Supports custom namespaces. |
+| aws_dimensions | list of strings | No | Dimentions to aggregate metric across. Required for metrics with dimensions. |
+| aws_dimensions_select | map | No | Optional filter. Maps from name of dimension to acceptable values for dimension. |
+| aws_dimensions_select_regex | map | No | Optional filter. Maps from name of dimension to regex for values to match. |
+| aws_statistics | list of strings | Yes | Statistics to display. Doesn't support extended statistics. |
+| range_seconds | number | No | Length of metric window in seconds. |
+| delay_seconds | number | No | Delays the end of the metric window by x seconds. If 0, ends window at current time. |
+| period_seconds | number | No | Metric period. |
+
+The **$_target** token in the dimensions select is used to pass a parameter given by Prometheus (for example a \__meta tag with service discovery).
+
+### Example Configuration
+
+```yaml
+accounts:
+ - '111111111111'
+ - '222222222222'
+tasks:
+  - name: lambda_errors
+   region: 'all'
+   account: 'all'
+   role_name: 'cloudwatch-reader'
+   metrics:
+    - aws_namespace: "AWS/Lambda"
+      aws_dimensions: ['FunctionName']
+      aws_dimensions_select_regex:
+        FunctionName: 'custodian-.*'
+      aws_metric_name: 'Errors'
+      aws_statistics: ['Maximum']
+      range_seconds: 900
+      period_seconds: 300
+      delay_seconds: 0
  - name: billing
-   default_region: us-east-1
+   region: us-east-1
    metrics:
     - aws_namespace: "AWS/Billing"
       aws_dimensions: [Currency]
@@ -27,6 +96,7 @@ tasks:
       range_seconds: 86400
 
  - name: ec2_cloudwatch
+   region: 'all'
    metrics:
     - aws_namespace: "AWS/EC2"
       aws_dimensions: [InstanceId]
@@ -43,6 +113,7 @@ tasks:
       aws_statistics: [Average]
 
   - name: vpn_mon
+    region: 'all'
     metrics:
      - aws_namespace: "AWS/VPN"
        aws_dimensions: [VpnId]
@@ -53,23 +124,23 @@ tasks:
        range_seconds: 3600
 ```
 
-
-### What are "Tasks" and "$_target"?
-
-Tasks are used to describe a CloudWatch scrape that can be reused on a whole set of instances and even cross-region.
-
-The **$_target** token in the dimensions select is used to pass a parameter given by  Prometheus (for example a \__meta tag with service discovery).
-
-For example a scrape URL looks like this:
-
-`http://localhost:9042/scrape?task=ec2_cloudwatch&target=i-0123456789&region=eu-west-1`
-
-With the example configuration above, this means that the CloudWatch exporter will scrape the `CPUUtilization` and the `NetworkOut` metrics when the dimension `InstanceId` will be equal to `i-0123456789` in the `eu-west-1` region according to the configuration of the task: `ec2_cloudwatch`.
-
 ### Hot reload of the configuration
 
 Let's say you can't afford to kill the process and restart it for any reason and you need to modify the configuration on the fly. It's possible! Just call the `/reload` endpoint.
 
+## Endpoints
+
+| Endpoint      | Description                                  |
+| ------------- | -------------------------------------------- |
+| `/metrics`    | Gathers metrics from the CloudWatch exporter itself such as the total number of requests made to the AWS CloudWatch API.
+| `/scrape`     | Gathers metrics from the CloudWatch API depending on the task and (optionally) the target passed as parameters.
+| `/reload`     | Does a live reload of the configuration without restarting the process
+
+For example a scrape URL could look like this:
+
+`http://localhost:9042/scrape?task=ec2_cloudwatch&target=i-0123456789&region=eu-west-1`
+
+The "target" and "region" parameters are optional, but the "task" parameter is required.
 
 ## How to configure Prometheus
 
@@ -117,26 +188,6 @@ The Billing example is there to demonstrate the multi-region capability of this 
 
 **Note:** It would also work if no default_region was specified but a `params` block with the `region` parameter was set in the Prometheus configuration.
 
-## Endpoints
-
-
-| Endpoint      | Description                                  |
-| ------------- | -------------------------------------------- |
-| `/metrics`    | Gathers metrics from the CloudWatch exporter itself such as the total number of requests made to the AWS CloudWatch API.
-| `/scrape`     | Gathers metrics from the CloudWatch API depending on the task and (optionally) the target passed as parameters.
-| `/reload`     | Does a live reload of the configuration without restarting the process
-
-## Why this remake?
-
-We felt left out when we wanted to monitor hundreds of machines on AWS thanks to CloudWatch when using the original exporter. We wanted to be able to use the service EC2 discovery functionnality provided by Prometheus to dynamically monitor our fleet.
-
-Regarding our requirements, installing Java runtime was also a bit of an issue, so we decided to make it *"compliant"* with the rest of the Prometheus project by using Golang.
-
-## TODO
-
-This exporter is still in its early stages! It still lacks ~~the `dimensions_select_regex` parameter~~ and the DynamoDB special use-cases. Any help and/or criticism is welcome!
-
-_`dimensions_select_regex` has been added [here](https://github.com/mtlang/cloudwatch_exporter/commit/880ea50f22f23497abaf02b1d306ccdb71cc7c58)
 
 ## End Note
 
