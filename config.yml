@@ -1,9 +1,18 @@
+accounts:
+ - '305346208703'
+ - 'junk_account'
+exclude_accounts:
+ - 'junk_account'
 tasks:
  - name: lambda_errors
    region: 'all'
+   account: 'all'
+   role_name: 'cloudwatch-reader'
    metrics:
     - aws_namespace: "AWS/Lambda"
       aws_dimensions: ['FunctionName']
+      aws_dimensions_select_regex:
+        FunctionName: 'custodian-.*'
       aws_metric_name: 'Errors'
       aws_statistics: ['Maximum']
       range_seconds: 3600

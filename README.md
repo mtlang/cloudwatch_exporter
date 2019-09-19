@@ -42,7 +42,7 @@ tasks:
       delay_seconds: delay_in_seconds (Defaults to 0)
 ```
 ### Configuration Fields
-At the top level of the configuration file are two fields: accounts and tasks. Accounts is just a list of AWS account numbers. This list is used by tasks that are set to scrape all accounts. 
+At the top level of the configuration file are three fields: accounts, exclude_accounts, and tasks. Accounts is just a list of AWS account numbers. This list is used by tasks that are set to scrape all accounts. If exclude_accounts are specified, any accounts in that list will not be scraped, even if they're in the accounts list.
 
 A task is a group of metrics which you would like to be presented together. Metrics are scraped by task, so only put metrics under the same task if you want them to always be presented together. 
 
@@ -69,6 +69,8 @@ The **$_target** token in the dimensions select is used to pass a parameter give
 ```yaml
 accounts:
  - '111111111111'
+ - '222222222222'
+exclude_accounts:
  - '222222222222'
 tasks:
   - name: lambda_errors

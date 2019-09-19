@@ -86,10 +86,22 @@ func generateTasks(cfg *config.Settings) {
 			region := task.Region
 			for _, account := range cfg.Accounts {
 				task.Account = account
+				
+				// Exclude the account if it's in exclude_accounts
+				exclude := false
+				for _, excludeAccount := range cfg.ExcludeAccounts {
+					if strings.EqualFold(account, excludeAccount) {
+						exclude = true
+					}
+				}
+				if exclude {
+					continue
+				}
+
 				if strings.EqualFold(region, "all") {
 
 					allRegions := getAllRegions()
-					
+
 					for _, regionToAdd := range allRegions {
 						task.Region = regionToAdd
 
@@ -105,7 +117,7 @@ func generateTasks(cfg *config.Settings) {
 			if strings.EqualFold(task.Region, "all") {
 
 				allRegions := getAllRegions()
-				
+
 				for _, region := range allRegions {
 					task.Region = region
 
@@ -161,6 +173,7 @@ func NewCwCollector(target string, taskName string, region string) (*Collector, 
 	}, nil
 }
 
+// Collect is used by the prometheus library to collect metrics
 func (collector *Collector) Collect(ch chan<- prometheus.Metric) {
 	now := time.Now()
 	scrape(collector, ch)
@@ -170,6 +183,7 @@ func (collector *Collector) Collect(ch chan<- prometheus.Metric) {
 	ch <- collector.ErroneousRequests
 }
 
+// Describe is used by the prometheus library to create descriptions for metrics
 func (collector *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- collector.ScrapeTime.Desc()
 	ch <- collector.ErroneousRequests.Desc()
