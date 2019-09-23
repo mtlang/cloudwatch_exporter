@@ -58,6 +58,7 @@ Each metric is defined by several fields:
 | aws_dimensions_select | map | No | Optional filter. Maps from name of dimension to acceptable values for dimension. 
 | aws_dimensions_select_regex | map | No | Optional filter. Maps from name of dimension to regex for values to match. 
 | aws_statistics | list of strings | Yes | Statistics to display. Doesn't support extended statistics. |
+| aws_extended_statistics | list of strings | No | Extended Statistics to display. |
 | range_seconds | number | No | Length of metric window in seconds. 
 | delay_seconds | number | No | Delays the end of the metric window by x seconds. If 0, ends window at current time. 
 | period_seconds | number | No | Metric period. 
@@ -107,6 +108,7 @@ tasks:
         InstanceId: [$_target]
       aws_metric_name: CPUUtilization
       aws_statistics: [Average]
+      aws_extended_statistics: ['p99']
 
     - aws_namespace: "AWS/EC2"
       aws_dimensions: [InstanceId]
@@ -114,6 +116,7 @@ tasks:
         InstanceId: [$_target]
       aws_metric_name: NetworkOut
       aws_statistics: [Average]
+      aws_extended_statistics: ['p99']
 
   - name: vpn_mon
     region: 'all'
