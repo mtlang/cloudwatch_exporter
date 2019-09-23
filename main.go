@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -51,7 +50,7 @@ func handleReload(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		str := fmt.Sprintf("Can't read configuration file: %s", err.Error())
 		fmt.Fprintln(w, str)
-		fmt.Println(str)
+		log.Fatal(str)
 	}
 	fmt.Fprintln(w, "Reload complete")
 }
@@ -106,8 +105,7 @@ func main() {
 
 	err := loadConfigFile()
 	if err != nil {
-		fmt.Printf("Can't read configuration file: %s\n", err.Error())
-		os.Exit(-1)
+		log.Fatalf("Can't read configuration file: %s\n", err.Error())
 	}
 
 	fmt.Println("CloudWatch exporter started...")

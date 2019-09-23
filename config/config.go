@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v2"
@@ -14,6 +15,7 @@ type Metric struct {
 	Name      string `yaml:"aws_metric_name"`
 
 	Statistics            []string            `yaml:"aws_statistics"`
+	ExtendedStatistics    []string            `yaml:"aws_extended_statistics"`
 	Dimensions            []string            `yaml:"aws_dimensions,omitempty"`
 	DimensionsSelect      map[string][]string `yaml:"aws_dimensions_select,omitempty"`
 	DimensionsSelectRegex map[string]string   `yaml:"aws_dimensions_select_regex,omitempty"`
@@ -33,17 +35,18 @@ type Task struct {
 	Account  string   `yaml:"account,omitempty"`
 
 	// These fields are determined at runtime
-	Desc    *prometheus.Desc
-	ValType prometheus.ValueType
+	Desc        *prometheus.Desc
+	ValType     prometheus.ValueType
 	LabelNames  []string
 	LabelValues []string
 }
 
 // Settings is a top level struct representing the settings file.
-// It divides what is scraped into several "tasks"
+// It divides what is scraped into several "tasks".
 type Settings struct {
-	Accounts    []string `yaml:"accounts,omitempty"`
-	Tasks       []Task   `yaml:"tasks"`
+	Accounts        []string `yaml:"accounts,omitempty"`
+	ExcludeAccounts []string `yaml:"exclude_accounts,omitempty"`
+	Tasks           []Task   `yaml:"tasks"`
 }
 
 // GetTasks returns all tasks with a given name
@@ -73,6 +76,7 @@ func (settings *Settings) GetTasks(name string) ([]*Task, error) {
 
 // Load returns a settings struct loaded from a given file
 func Load(filename string) (*Settings, error) {
+	log.SetFlags(log.Lshortfile)
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -83,23 +87,6 @@ func Load(filename string) (*Settings, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return cfg, nil
-}
-
-// UnmarshalYAML unmarshalls
-func (m *Metric) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type plain Metric
-
-	// These are the default values for a basic metric config
-	rawMetric := plain{
-		PeriodSeconds: 60,
-		RangeSeconds:  600,
-		DelaySeconds:  0,
-	}
-	if err := unmarshal(&rawMetric); err != nil {
-		return err
-	}
-
-	*m = Metric(rawMetric)
-	return nil
 }

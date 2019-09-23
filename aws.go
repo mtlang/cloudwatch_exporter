@@ -59,6 +59,7 @@ func scrapeTask(collector *Collector, ch chan<- prometheus.Metric, task *config.
 			Namespace:  aws.String(configMetric.Namespace),
 			Dimensions: []*cloudwatch.Dimension{},
 			Statistics: []*string{},
+			ExtendedStatistics: []*string{},
 			Unit:       nil,
 		}
 
@@ -82,6 +83,9 @@ func scrapeTask(collector *Collector, ch chan<- prometheus.Metric, task *config.
 
 		for _, stat := range configMetric.Statistics {
 			params.Statistics = append(params.Statistics, aws.String(stat))
+		}
+		for _, stat := range configMetric.ExtendedStatistics {
+			params.ExtendedStatistics = append(params.ExtendedStatistics, aws.String(stat))
 		}
 
 		labels := make([]string, 0, len(task.LabelNames))
@@ -225,6 +229,7 @@ func scrapeSingleDataPoint(collector *Collector, ch chan<- prometheus.Metric, pa
 
 	if err != nil {
 		collector.ErroneousRequests.Inc()
+		fmt.Println(fmt.Sprintf("%s - %s - %s:%s", task.Account, task.Region, *params.Dimensions[0].Name, *params.Dimensions[0].Value))
 		fmt.Println(err)
 		return err
 	}
@@ -238,27 +243,34 @@ func scrapeSingleDataPoint(collector *Collector, ch chan<- prometheus.Metric, pa
 
 	if dp.Sum != nil {
 		labels[len(labels)-1] = "Sum"
-		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Sum), labels...)
+		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, *dp.Sum, labels...)
 	}
 
 	if dp.Average != nil {
 		labels[len(labels)-1] = "Average"
-		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Average), labels...)
+		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, *dp.Average, labels...)
 	}
 
 	if dp.Maximum != nil {
 		labels[len(labels)-1] = "Maximum"
-		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Maximum), labels...)
+		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, *dp.Maximum, labels...)
 	}
 
 	if dp.Minimum != nil {
 		labels[len(labels)-1] = "Minimum"
-		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.Minimum), labels...)
+		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, *dp.Minimum, labels...)
 	}
 
 	if dp.SampleCount != nil {
 		labels[len(labels)-1] = "SampleCount"
-		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, float64(*dp.SampleCount), labels...)
+		ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, *dp.SampleCount, labels...)
+	}
+
+	if dp.ExtendedStatistics != nil {
+		for statisticName, statisticValue := range dp.ExtendedStatistics {
+			labels[len(labels)-1] = statisticName
+			ch <- prometheus.MustNewConstMetric(task.Desc, task.ValType, *statisticValue, labels...)
+		}
 	}
 	return nil
 }
